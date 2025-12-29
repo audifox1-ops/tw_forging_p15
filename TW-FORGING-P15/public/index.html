@@ -20,7 +20,7 @@
                 <i class="fa-solid fa-industry text-blue-600 mr-2"></i>견적 검토 자동 분석 시스템
             </h1>
             <p class="text-gray-500">엑셀(.xlsx) 파일을 업로드하거나 <strong>화면을 캡처하여 붙여넣기(Ctrl+V)</strong>하면 자동 분석합니다.</p>
-            <p class="text-xs text-orange-500 mt-2 font-semibold" id="envIndicator">* Vercel 배포 상태를 확인 중입니다...</p>
+            <p class="text-xs text-blue-600 mt-2 font-semibold" id="envIndicator">* 현재 로컬/미리보기 모드로 작동 중입니다.</p>
         </header>
 
         <!-- Upload Section -->
@@ -67,8 +67,8 @@
                     <div class="ml-3">
                         <p class="text-sm text-yellow-700">
                             <strong>[미리보기 모드 작동]</strong><br>
-                            현재 서버(Vercel)가 연결되지 않아 브라우저 내부 로직으로 분석 결과를 시뮬레이션했습니다.<br>
-                            실제 AI 정밀 분석을 사용하려면 이 코드를 Vercel에 배포해야 합니다.
+                            현재 서버 연결 없이 브라우저 자체 로직으로 분석했습니다.<br>
+                            * 404 에러나 ID 변경은 채팅창 미리보기 세션 만료 때문이며, 이 파일을 저장해서 쓰시면 발생하지 않습니다.
                         </p>
                     </div>
                 </div>
@@ -108,22 +108,16 @@
         const envIndicator = document.getElementById('envIndicator');
         const simulationNotice = document.getElementById('simulationNotice');
 
-        // Check Environment immediately
-        const isBlobEnv = window.location.protocol === 'blob:';
-        if (isBlobEnv) {
-            envIndicator.textContent = "* 현재 미리보기(Blob) 환경입니다. (시뮬레이션 모드로 동작)";
-            envIndicator.classList.remove('text-orange-500');
-            envIndicator.classList.add('text-blue-600');
-        }
+        // 환경 확인 플래그 (배포 전/후 확인용)
+        // 파일 프로토콜(로컬 실행)이거나 blob(미리보기)인 경우 true
+        const isLocalOrPreview = window.location.protocol === 'file:' || window.location.protocol === 'blob:' || window.location.hostname.includes('lovable');
 
         // --- 1. Paste Event Listener (붙여넣기 기능) ---
         document.addEventListener('paste', (event) => {
             const items = event.clipboardData.items;
             for (let i = 0; i < items.length; i++) {
-                // 이미지가 클립보드에 있는지 확인
                 if (items[i].type.indexOf('image') !== -1) {
                     const blob = items[i].getAsFile();
-                    // 임의의 파일명 생성 (예: pasted_image_timestamp.png)
                     const file = new File([blob], `captured_image_${Date.now()}.png`, { type: blob.type });
                     
                     // UI 피드백
@@ -131,7 +125,7 @@
                     setTimeout(() => dropzone.classList.remove('border-green-500', 'bg-green-50'), 500);
                     
                     processFile(file);
-                    break; // 첫 번째 이미지만 처리
+                    break;
                 }
             }
         });
@@ -151,7 +145,7 @@
 
         // --- 3. Main Process Function ---
         async function processFile(file) {
-            // UI Reset
+            // UI 초기화
             resultArea.classList.add('hidden');
             simulationNotice.classList.add('hidden');
             loading.classList.remove('hidden');
@@ -164,15 +158,15 @@
             let csvContentForSim = ""; 
 
             try {
-                // 3-1. 엑셀 파일 처리
+                // 3-1. 엑셀 파일 처리 (Active Sheet 인식)
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                    console.log("엑셀 파일 감지: CSV 변환 시작");
+                    console.log("엑셀 파일 감지: 처리 시작");
                     const arrayBuffer = await file.arrayBuffer();
                     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                     
                     let targetSheetName = workbook.SheetNames[0];
 
-                    // Active Sheet 감지
+                    // Active Sheet 감지 로직
                     if (workbook.Workbook && workbook.Workbook.Views && workbook.Workbook.Views.length > 0) {
                         const activeTab = workbook.Workbook.Views[0].ActiveTab;
                         if (typeof activeTab === 'number' && workbook.SheetNames[activeTab]) {
@@ -186,6 +180,7 @@
                     const worksheet = workbook.Sheets[targetSheetName];
                     csvContentForSim = XLSX.utils.sheet_to_csv(worksheet);
                     
+                    // 백엔드 전송용 파일 생성 (텍스트 변환됨)
                     fileToUpload = new File([csvContentForSim], file.name.replace(/\.[^/.]+$/, ".csv"), {
                         type: "text/csv",
                     });
@@ -194,17 +189,17 @@
                 else if (file.name.endsWith('.csv')) {
                     csvContentForSim = await file.text();
                 }
-                // 3-3. 이미지 처리 (붙여넣기 된 파일)
+                // 3-3. 이미지 처리
                 else if (file.type.startsWith('image/')) {
                     loadingText.textContent = "이미지 데이터 분석 중...";
                     sheetInfoDisplay.textContent = "이미지 분석 모드";
-                    csvContentForSim = "IMAGE_MODE"; // 시뮬레이션용 플래그
+                    csvContentForSim = "IMAGE_MODE"; 
                 }
 
-                // 4. 환경에 따른 분기 처리 (URL 파싱 에러 방지)
-                if (isBlobEnv || window.location.hostname.includes('lovable')) {
-                    console.warn("Blob/Preview environment detected. Skipping Fetch.");
-                    await new Promise(r => setTimeout(r, 1000));
+                // 4. 로컬/미리보기 환경이면 서버 호출 건너뛰고 시뮬레이션 실행
+                if (isLocalOrPreview) {
+                    console.warn("로컬 환경 감지됨. 서버 호출 생략하고 시뮬레이션 모드 실행.");
+                    await new Promise(r => setTimeout(r, 1000)); // 분석하는 척 딜레이
                     
                     const simulatedItems = simulateAnalysis(csvContentForSim, file.name);
                     renderTable(simulatedItems);
@@ -212,7 +207,7 @@
                     return; 
                 }
 
-                // 5. 백엔드로 전송 (실제 배포 환경)
+                // 5. 실제 서버(Vercel)로 전송 (배포된 환경에서만 작동)
                 loadingText.textContent = "AI 서버로 데이터 전송 중...";
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
@@ -239,7 +234,8 @@
                 renderTable(result.data.items);
 
             } catch (error) {
-                if (error.message === "API_NOT_FOUND" || error.message.includes('Failed to parse URL')) {
+                // API 404 에러 발생 시 시뮬레이션 모드로 자동 전환 (사용자 경험 보호)
+                if (error.message === "API_NOT_FOUND" || error.message.includes('Failed to parse URL') || error.message.includes('fetch')) {
                     console.warn("서버 연결 실패, 시뮬레이션 모드로 전환");
                     const simulatedItems = simulateAnalysis(csvContentForSim, file.name);
                     renderTable(simulatedItems);
@@ -254,11 +250,11 @@
             }
         }
 
-        // --- 시뮬레이션 함수 (서버 없을 때 작동) ---
+        // --- 시뮬레이션 함수 (서버 없을 때 브라우저에서 계산) ---
         function simulateAnalysis(content, fileName) {
             const items = [];
             
-            // 이미지 모드일 경우 가짜 데이터 반환
+            // 이미지 모드 (임시)
             if (content === "IMAGE_MODE") {
                 return [{
                     rowId: "IMG-01",
@@ -277,6 +273,8 @@
             const rows = content.split('\n');
             let shape = "UNKNOWN";
             const upperName = fileName.toUpperCase();
+            
+            // 형상 추측 로직
             if (upperName.includes('SQUARE') || upperName.includes('BLOCK')) shape = "SQUARE";
             else if (upperName.includes('SHAFT') || upperName.includes('ROUND')) shape = "SHAFT";
             else if (upperName.includes('RING')) shape = "RING";
@@ -289,15 +287,19 @@
                 if (cols.length < 5) return; 
 
                 const firstCol = cols[0];
+                // 데이터 행인지 판단 (숫자나 식별자로 시작하는지)
                 const isDataRow = /^#?\d+/.test(firstCol) || /^[A-Z]\d+/.test(firstCol) || (shape === 'SHAFT' && /^[A-Z]$/.test(firstCol));
 
                 if (isDataRow) {
                     const nums = cols.map(c => parseFloat(c)).filter(n => !isNaN(n) && n > 0);
                     
+                    // 최소 6개 숫자 (입력3 + 출력3)가 있어야 분석 시도
                     if (nums.length >= 6) { 
                         let inputSpec = {}, outputSpec = {};
+                        
+                        // 단순화된 로직: 앞쪽 3개를 입력, 뒤쪽(중량 제외) 3개를 출력으로 가정
                         const inputVals = nums.slice(0, 3);
-                        const potentialDims = nums.filter(n => n < 10000); 
+                        const potentialDims = nums.filter(n => n < 10000); // 중량 제외
                         const outputVals = potentialDims.slice(-3);
 
                         if (shape === 'SQUARE') {
@@ -318,7 +320,7 @@
                             material: cols.find(c => c.startsWith('S') || c.startsWith('A')) || '-',
                             inputSpec: inputSpec,
                             outputSpec: outputSpec,
-                            allowanceSpec: null,
+                            allowanceSpec: null, // UI에서 자동 계산됨
                             weight: weight > 1000 ? weight : 0,
                             ingotType: ingotCode,
                             recoveryRate: yieldVal || 0.68,
@@ -351,6 +353,7 @@
                     return parts.join(' / ');
                 };
 
+                // 여유치 표시용 계산
                 let allowanceDisplay = 'Auto';
                 if (item.inputSpec && item.outputSpec) {
                     const diffs = [];
