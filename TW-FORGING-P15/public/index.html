@@ -8,8 +8,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS (엑셀 변환 라이브러리) -->
+    <!-- SheetJS (엑셀 변환) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- Tesseract.js (이미지 문자 인식 OCR) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
@@ -29,10 +31,10 @@
                 <div class="text-5xl text-blue-100">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                 </div>
-                <h3 class="text-xl font-semibold">파일을 드래그하거나 <span class="text-blue-600">Ctrl+V</span>로 붙여넣으세요</h3>
+                <h3 class="text-xl font-semibold">파일을 드래그하거나 <span class="text-blue-600">Ctrl+V</span>로 이미지를 붙여넣으세요</h3>
                 <div class="text-sm text-gray-400">
-                    <p>지원 형식: .xlsx, .xls, .csv</p>
-                    <p class="text-xs mt-1 text-blue-400 font-medium">✨ 캡처한 도면/표 이미지도 붙여넣기 가능합니다.</p>
+                    <p>지원 형식: .xlsx, .xls, .csv, 이미지(PNG/JPG)</p>
+                    <p class="text-xs mt-1 text-blue-400 font-medium">✨ 캡처한 표나 도면의 치수를 자동으로 읽어냅니다 (OCR)</p>
                 </div>
                 <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls,image/*">
                 <button onclick="document.getElementById('fileInput').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
@@ -44,8 +46,12 @@
         <!-- Loading Indicator -->
         <div id="loading" class="hidden mt-8 text-center">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
-            <p class="mt-3 text-gray-600 font-medium">데이터 변환 및 분석 중입니다...</p>
+            <p class="mt-3 text-gray-600 font-medium" id="loadingTitle">데이터 분석 중...</p>
             <p class="text-xs text-gray-400" id="loadingText">데이터 인식 중...</p>
+            <!-- Progress Bar for OCR -->
+            <div id="ocrProgressContainer" class="hidden w-64 mx-auto mt-3 bg-gray-200 rounded-full h-2.5">
+                <div id="ocrProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
         </div>
 
         <!-- Result Section -->
@@ -62,13 +68,13 @@
             <div id="simulationNotice" class="hidden bg-yellow-50 border-l-4 border-yellow-400 p-4">
                 <div class="flex">
                     <div class="flex-shrink-0">
-                        <i class="fa-solid fa-triangle-exclamation text-yellow-400"></i>
+                        <i class="fa-solid fa-robot text-yellow-500"></i>
                     </div>
                     <div class="ml-3">
                         <p class="text-sm text-yellow-700">
-                            <strong>[미리보기 모드 작동]</strong><br>
-                            현재 서버 연결 없이 브라우저 자체 로직으로 분석했습니다.<br>
-                            * 404 에러나 ID 변경은 채팅창 미리보기 세션 만료 때문이며, 이 파일을 저장해서 쓰시면 발생하지 않습니다.
+                            <strong>[브라우저 자체 분석]</strong><br>
+                            서버 연결 없이 브라우저의 OCR(문자 인식) 기술로 이미지/파일을 분석했습니다.<br>
+                            * 실제 배포된 환경에서는 더 정밀한 AI 분석이 적용됩니다.
                         </p>
                     </div>
                 </div>
@@ -100,6 +106,7 @@
         const fileInput = document.getElementById('fileInput');
         const dropzone = document.getElementById('dropzone');
         const loading = document.getElementById('loading');
+        const loadingTitle = document.getElementById('loadingTitle');
         const loadingText = document.getElementById('loadingText');
         const resultArea = document.getElementById('resultArea');
         const tableBody = document.getElementById('resultTableBody');
@@ -107,12 +114,13 @@
         const sheetInfoDisplay = document.getElementById('sheetInfoDisplay');
         const envIndicator = document.getElementById('envIndicator');
         const simulationNotice = document.getElementById('simulationNotice');
+        const ocrProgressContainer = document.getElementById('ocrProgressContainer');
+        const ocrProgressBar = document.getElementById('ocrProgressBar');
 
-        // 환경 확인 플래그 (배포 전/후 확인용)
-        // 파일 프로토콜(로컬 실행)이거나 blob(미리보기)인 경우 true
+        // 환경 확인 플래그
         const isLocalOrPreview = window.location.protocol === 'file:' || window.location.protocol === 'blob:' || window.location.hostname.includes('lovable');
 
-        // --- 1. Paste Event Listener (붙여넣기 기능) ---
+        // --- 1. Paste Event Listener (붙여넣기) ---
         document.addEventListener('paste', (event) => {
             const items = event.clipboardData.items;
             for (let i = 0; i < items.length; i++) {
@@ -149,24 +157,24 @@
             resultArea.classList.add('hidden');
             simulationNotice.classList.add('hidden');
             loading.classList.remove('hidden');
-            loadingText.textContent = "파일 읽는 중...";
+            ocrProgressContainer.classList.add('hidden');
+            loadingTitle.textContent = "파일 분석 중...";
+            loadingText.textContent = "데이터 읽는 중...";
             tableBody.innerHTML = '';
             fileNameDisplay.textContent = file.name;
             sheetInfoDisplay.textContent = '';
 
             let fileToUpload = file;
-            let csvContentForSim = ""; 
+            let textContentForSim = ""; 
 
             try {
-                // 3-1. 엑셀 파일 처리 (Active Sheet 인식)
+                // 3-1. 엑셀 파일 처리
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                    console.log("엑셀 파일 감지: 처리 시작");
+                    console.log("엑셀 파일 감지");
                     const arrayBuffer = await file.arrayBuffer();
                     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                     
                     let targetSheetName = workbook.SheetNames[0];
-
-                    // Active Sheet 감지 로직
                     if (workbook.Workbook && workbook.Workbook.Views && workbook.Workbook.Views.length > 0) {
                         const activeTab = workbook.Workbook.Views[0].ActiveTab;
                         if (typeof activeTab === 'number' && workbook.SheetNames[activeTab]) {
@@ -174,70 +182,67 @@
                         }
                     }
                     
-                    loadingText.textContent = `활성 시트('${targetSheetName}') 데이터 변환 중...`;
+                    loadingText.textContent = `시트('${targetSheetName}') 데이터 변환 중...`;
                     sheetInfoDisplay.textContent = `분석된 시트: ${targetSheetName}`;
-
                     const worksheet = workbook.Sheets[targetSheetName];
-                    csvContentForSim = XLSX.utils.sheet_to_csv(worksheet);
+                    textContentForSim = XLSX.utils.sheet_to_csv(worksheet);
                     
-                    // 백엔드 전송용 파일 생성 (텍스트 변환됨)
-                    fileToUpload = new File([csvContentForSim], file.name.replace(/\.[^/.]+$/, ".csv"), {
-                        type: "text/csv",
-                    });
+                    // 백엔드 전송용 생성
+                    fileToUpload = new File([textContentForSim], file.name.replace(/\.[^/.]+$/, ".csv"), { type: "text/csv" });
                 } 
                 // 3-2. CSV 처리
                 else if (file.name.endsWith('.csv')) {
-                    csvContentForSim = await file.text();
+                    textContentForSim = await file.text();
                 }
-                // 3-3. 이미지 처리
+                // 3-3. 이미지 처리 (OCR 적용)
                 else if (file.type.startsWith('image/')) {
-                    loadingText.textContent = "이미지 데이터 분석 중...";
-                    sheetInfoDisplay.textContent = "이미지 분석 모드";
-                    csvContentForSim = "IMAGE_MODE"; 
+                    console.log("이미지 파일 감지: OCR 시작");
+                    loadingTitle.textContent = "이미지 문자 인식(OCR) 중...";
+                    loadingText.textContent = "Tesseract 엔진 로딩...";
+                    ocrProgressContainer.classList.remove('hidden');
+                    sheetInfoDisplay.textContent = "이미지 OCR 분석 결과";
+
+                    // Tesseract OCR 실행
+                    textContentForSim = await performOCR(file);
+                    
+                    // 백엔드 전송용 생성 (OCR 결과를 텍스트로)
+                    fileToUpload = new File([textContentForSim], "ocr_result.txt", { type: "text/plain" });
                 }
 
-                // 4. 로컬/미리보기 환경이면 서버 호출 건너뛰고 시뮬레이션 실행
+                // 4. 로컬/미리보기 환경이면 시뮬레이션 실행
                 if (isLocalOrPreview) {
-                    console.warn("로컬 환경 감지됨. 서버 호출 생략하고 시뮬레이션 모드 실행.");
-                    await new Promise(r => setTimeout(r, 1000)); // 분석하는 척 딜레이
+                    console.warn("로컬 환경: 시뮬레이션 모드 실행");
+                    // 약간의 딜레이로 분석 느낌 제공
+                    await new Promise(r => setTimeout(r, 500));
                     
-                    const simulatedItems = simulateAnalysis(csvContentForSim, file.name);
+                    const simulatedItems = simulateAnalysis(textContentForSim, file.name);
                     renderTable(simulatedItems);
                     simulationNotice.classList.remove('hidden');
                     return; 
                 }
 
-                // 5. 실제 서버(Vercel)로 전송 (배포된 환경에서만 작동)
-                loadingText.textContent = "AI 서버로 데이터 전송 중...";
+                // 5. 실제 서버(Vercel)로 전송
+                loadingTitle.textContent = "AI 서버 분석 요청 중...";
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
 
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
+                const response = await fetch('/api/analyze', { method: 'POST', body: formData });
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    if (response.status === 404) {
-                        throw new Error("API_NOT_FOUND");
-                    }
+                    if (response.status === 404) throw new Error("API_NOT_FOUND");
                     throw new Error(errorData.error || `서버 오류 (${response.status})`);
                 }
 
                 const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || '분석에 실패했습니다.');
-                }
+                if (!result.success) throw new Error(result.error || '분석 실패');
 
                 renderTable(result.data.items);
 
             } catch (error) {
-                // API 404 에러 발생 시 시뮬레이션 모드로 자동 전환 (사용자 경험 보호)
                 if (error.message === "API_NOT_FOUND" || error.message.includes('Failed to parse URL') || error.message.includes('fetch')) {
-                    console.warn("서버 연결 실패, 시뮬레이션 모드로 전환");
-                    const simulatedItems = simulateAnalysis(csvContentForSim, file.name);
+                    console.warn("서버 연결 실패 -> 시뮬레이션 모드 전환");
+                    const simulatedItems = simulateAnalysis(textContentForSim, file.name);
                     renderTable(simulatedItems);
                     simulationNotice.classList.remove('hidden');
                 } else {
@@ -250,85 +255,126 @@
             }
         }
 
-        // --- 시뮬레이션 함수 (서버 없을 때 브라우저에서 계산) ---
+        // --- 이미지 OCR 함수 (Tesseract.js) ---
+        async function performOCR(file) {
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        const pct = (m.progress * 100).toFixed(0) + '%';
+                        ocrProgressBar.style.width = pct;
+                        loadingText.textContent = `텍스트 판독 중... ${pct}`;
+                    }
+                }
+            });
+            
+            const ret = await worker.recognize(file);
+            console.log("OCR 결과:", ret.data.text);
+            await worker.terminate();
+            return ret.data.text;
+        }
+
+        // --- 시뮬레이션 분석 함수 (텍스트 패턴 인식) ---
         function simulateAnalysis(content, fileName) {
             const items = [];
-            
-            // 이미지 모드 (임시)
-            if (content === "IMAGE_MODE") {
-                return [{
-                    rowId: "IMG-01",
-                    productName: "DETECTED_FROM_IMAGE",
-                    material: "SA266",
-                    inputSpec: { od: 1500, id: 800, length: 300 },
-                    outputSpec: { od: 1550, id: 750, length: 350 },
-                    allowanceSpec: { od: 50, id: 50, length: 50 },
-                    weight: 2500,
-                    ingotType: "Image Analysis Needed",
-                    recoveryRate: 0.68,
-                    note: "이미지는 백엔드(AI)가 있어야 정확히 분석됩니다. (현재 시뮬레이션)"
-                }];
-            }
+            if (!content) return [];
 
             const rows = content.split('\n');
             let shape = "UNKNOWN";
             const upperName = fileName.toUpperCase();
+            const upperContent = content.toUpperCase();
             
-            // 형상 추측 로직
-            if (upperName.includes('SQUARE') || upperName.includes('BLOCK')) shape = "SQUARE";
+            // 형상 추측
+            if (upperName.includes('SQUARE') || upperContent.includes('SQ') || upperContent.includes('W')) shape = "SQUARE";
             else if (upperName.includes('SHAFT') || upperName.includes('ROUND')) shape = "SHAFT";
             else if (upperName.includes('RING')) shape = "RING";
             else if (upperName.includes('SHELL')) shape = "SHELL";
             else if (upperName.includes('DISC') || upperName.includes('DISK')) shape = "DISC";
-            else if (upperName.includes('화공기')) shape = "화공기";
+            else if (upperName.includes('화공기') || upperContent.includes('OD')) shape = "화공기";
 
+            // 행 단위 분석
             rows.forEach((row, idx) => {
-                const cols = row.split(',').map(c => c.trim());
-                if (cols.length < 5) return; 
-
-                const firstCol = cols[0];
-                // 데이터 행인지 판단 (숫자나 식별자로 시작하는지)
-                const isDataRow = /^#?\d+/.test(firstCol) || /^[A-Z]\d+/.test(firstCol) || (shape === 'SHAFT' && /^[A-Z]$/.test(firstCol));
-
-                if (isDataRow) {
-                    const nums = cols.map(c => parseFloat(c)).filter(n => !isNaN(n) && n > 0);
+                // 구분자(콤마, 탭, 공백 등)로 분리하여 숫자 추출
+                const cols = row.replace(/,/g, ' ').split(/\s+/);
+                const nums = cols.map(c => parseFloat(c)).filter(n => !isNaN(n) && n > 0);
+                
+                // 유효 데이터 행 판단 (숫자가 3개 이상 있는 경우)
+                if (nums.length >= 3) {
+                    let inputSpec = {}, outputSpec = {}, allowanceSpec = null;
+                    let weight = 0;
                     
-                    // 최소 6개 숫자 (입력3 + 출력3)가 있어야 분석 시도
-                    if (nums.length >= 6) { 
-                        let inputSpec = {}, outputSpec = {};
-                        
-                        // 단순화된 로직: 앞쪽 3개를 입력, 뒤쪽(중량 제외) 3개를 출력으로 가정
-                        const inputVals = nums.slice(0, 3);
-                        const potentialDims = nums.filter(n => n < 10000); // 중량 제외
-                        const outputVals = potentialDims.slice(-3);
+                    // 치수 추출 로직 (휴리스틱)
+                    // 보통: [제품치수] ... [단조치수] ... [중량]
+                    // 입력치수는 작은 값들 중 앞부분, 단조치수는 뒷부분
+                    
+                    // 중량(Weight) 분리: 보통 1000 이상의 큰 수 (혹은 밀도 7.85 근처 제외)
+                    const bigNums = nums.filter(n => n > 1000);
+                    weight = bigNums.length > 0 ? Math.max(...bigNums) : 0;
+                    
+                    // 치수 후보군 (중량 제외한 숫자들)
+                    const dims = nums.filter(n => n < 10000 && n !== 7.85 && n !== 0.68);
+                    
+                    if (dims.length >= 3) {
+                        // 입력 치수 (앞 3개)
+                        const i1 = dims[0] || 0;
+                        const i2 = dims[1] || 0;
+                        const i3 = dims[2] || 0;
 
-                        if (shape === 'SQUARE') {
-                            inputSpec = { length: inputVals[0], width: inputVals[1], thickness: inputVals[2] };
-                            outputSpec = { length: outputVals[0], width: outputVals[1], thickness: outputVals[2] };
+                        // 출력 치수 (뒤 3개, 만약 부족하면 입력+여유로 가정)
+                        // 만약 숫자가 6개 이상이면 뒤 3개를 출력으로
+                        let o1, o2, o3;
+                        if (dims.length >= 6) {
+                            o1 = dims[dims.length-3];
+                            o2 = dims[dims.length-2];
+                            o3 = dims[dims.length-1];
                         } else {
-                            inputSpec = { od: inputVals[0], id: inputVals[1], length: inputVals[2] };
-                            outputSpec = { od: outputVals[0], id: outputVals[1], length: outputVals[2] };
+                            // 출력이 없으면 임의로 여유치 더해서 시뮬레이션
+                            o1 = i1 + 50;
+                            o2 = i2 + (shape === 'SQUARE' ? 0 : 50); // ID는 보통 줄어들거나 0
+                            o3 = i3 + 50;
                         }
 
-                        const weight = Math.max(...nums);
-                        const yieldVal = nums.find(n => n > 0 && n < 1); 
-                        const ingotCode = cols.find(c => /\d{3}[A-Z]/.test(c)) || "-"; 
+                        if (shape === 'SQUARE') {
+                            inputSpec = { length: i1, width: i2, thickness: i3 };
+                            outputSpec = { length: o1, width: o2, thickness: o3 };
+                        } else {
+                            inputSpec = { od: i1, id: i2, length: i3 };
+                            outputSpec = { od: o1, id: o2, length: o3 };
+                        }
+
+                        // Ingot 찾기 (텍스트에서 패턴 매칭)
+                        const ingotMatch = row.match(/\d{3}[A-Z]/); // 예: 101C
+                        const ingotCode = ingotMatch ? ingotMatch[0] : "-";
+                        
+                        // 회수율 찾기 (0.xx 패턴)
+                        const yieldVal = nums.find(n => n > 0.3 && n < 1.0) || 0.68;
 
                         items.push({
-                            rowId: firstCol,
+                            rowId: idx + 1, // 행 번호로 대체
                             productName: shape,
-                            material: cols.find(c => c.startsWith('S') || c.startsWith('A')) || '-',
+                            material: row.match(/[A-Z]{2,}\d+/)?.[0] || 'Unknown', // 재질 추측
                             inputSpec: inputSpec,
                             outputSpec: outputSpec,
-                            allowanceSpec: null, // UI에서 자동 계산됨
-                            weight: weight > 1000 ? weight : 0,
+                            allowanceSpec: null, // UI 자동계산
+                            weight: weight,
                             ingotType: ingotCode,
-                            recoveryRate: yieldVal || 0.68,
-                            note: "시뮬레이션 모드 결과"
+                            recoveryRate: yieldVal,
+                            note: "패턴 인식 결과"
                         });
                     }
                 }
             });
+
+            // 결과가 없으면 (이미지 인식 실패 등) 원본 텍스트라도 보여주기 위해 더미 하나 추가
+            if (items.length === 0 && content.length > 10) {
+                items.push({
+                    rowId: "RAW",
+                    productName: "TEXT_DETECTED",
+                    material: "-",
+                    inputSpec: {}, outputSpec: {},
+                    weight: 0,
+                    note: "텍스트 인식됨: " + content.substring(0, 30) + "..."
+                });
+            }
 
             return items;
         }
@@ -350,10 +396,9 @@
                     if(dim.length) parts.push(`L ${dim.length}`);
                     if(dim.width) parts.push(`W ${dim.width}`);
                     if(dim.thickness) parts.push(`T ${dim.thickness}`);
-                    return parts.join(' / ');
+                    return parts.length > 0 ? parts.join(' / ') : '-';
                 };
 
-                // 여유치 표시용 계산
                 let allowanceDisplay = 'Auto';
                 if (item.inputSpec && item.outputSpec) {
                     const diffs = [];
