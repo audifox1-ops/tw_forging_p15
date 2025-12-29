@@ -20,6 +20,7 @@
                 <i class="fa-solid fa-industry text-blue-600 mr-2"></i>견적 검토 자동 분석 시스템
             </h1>
             <p class="text-gray-500">엑셀(.xlsx) 파일을 업로드하면 <strong>선택된(Active) 시트</strong>를 자동으로 인식하여 분석합니다.</p>
+            <p class="text-xs text-orange-500 mt-2 font-semibold">* 실제 분석(AI)은 Vercel 배포 후에 작동합니다.</p>
         </header>
 
         <!-- Upload Section -->
@@ -105,7 +106,7 @@
             let fileToUpload = file;
 
             try {
-                // 1. 엑셀 파일(.xlsx, .xls)인지 확인
+                // 1. 엑셀 파일(.xlsx, .xls)인지 확인 및 시트 추출
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
                     console.log("엑셀 파일 감지: CSV 변환 시작");
                     const arrayBuffer = await file.arrayBuffer();
@@ -117,15 +118,12 @@
                     let targetSheetName = workbook.SheetNames[0];
 
                     // Active Sheet (선택된 시트) 감지 로직
-                    // workbook.Workbook.Views 배열을 확인하여 ActiveTab 인덱스를 가져옴
                     if (workbook.Workbook && workbook.Workbook.Views && workbook.Workbook.Views.length > 0) {
                         const activeTab = workbook.Workbook.Views[0].ActiveTab;
                         if (typeof activeTab === 'number' && workbook.SheetNames[activeTab]) {
                             targetSheetName = workbook.SheetNames[activeTab];
                             console.log(`활성 시트 감지됨: ${targetSheetName} (Index: ${activeTab})`);
                         }
-                    } else {
-                        console.log("활성 시트 정보 없음, 첫 번째 시트 사용:", targetSheetName);
                     }
                     
                     const worksheet = workbook.Sheets[targetSheetName];
@@ -141,11 +139,21 @@
                     console.log("CSV 변환 완료:", fileToUpload.name);
                 }
 
-                // 2. 백엔드로 전송
+                // 2. 환경 확인 (Blob/LocalPreview 감지)
+                const isPreview = window.location.protocol === 'blob:' || window.location.hostname.includes('lovable');
+                
+                if (isPreview) {
+                    // 미리보기 환경에서는 API 호출 대신 성공 메시지 표시 (Fetch 오류 방지)
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // 로딩 시늉
+                    alert(`✅ 엑셀 변환 성공!\n\n- 변환된 시트: ${fileToUpload.name}\n- 파일 크기: ${fileToUpload.size} bytes\n\n[알림] 실제 AI 분석은 Vercel에 배포된 환경에서만 작동합니다. 코드를 Vercel에 배포해주세요.`);
+                    loading.classList.add('hidden');
+                    return; // 여기서 중단
+                }
+
+                // 3. 백엔드로 전송 (실제 배포 환경)
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
 
-                // 주의: Vercel 배포 주소 또는 로컬 환경이 필요합니다.
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     body: formData
@@ -166,18 +174,23 @@
 
             } catch (error) {
                 let msg = error.message;
-                if (msg.includes('Failed to parse URL')) {
-                    msg = "API 서버를 찾을 수 없습니다. Vercel에 배포되었는지 확인해주세요.";
+                // Blob URL 관련 오류 친절하게 안내
+                if (msg.includes('Failed to parse URL') || msg.includes('Failed to execute \'fetch\'')) {
+                    msg = "현재 실행 환경(미리보기)에서는 백엔드 API를 호출할 수 없습니다.\n\n이 코드는 Vercel에 배포된 후 정상 작동합니다.";
                 }
                 alert('오류 발생: ' + msg);
                 console.error(error);
             } finally {
                 loading.classList.add('hidden');
-                resultArea.classList.remove('hidden');
+                if (!loading.classList.contains('hidden')) {
+                     resultArea.classList.remove('hidden');
+                }
             }
         }
 
         function renderTable(items) {
+            resultArea.classList.remove('hidden'); // 결과 영역 표시
+            
             if (!items || items.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">분석된 데이터가 없습니다.</td></tr>';
                 return;
