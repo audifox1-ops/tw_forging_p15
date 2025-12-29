@@ -117,12 +117,15 @@
                     let targetSheetName = workbook.SheetNames[0];
 
                     // Active Sheet (선택된 시트) 감지 로직
+                    // workbook.Workbook.Views 배열을 확인하여 ActiveTab 인덱스를 가져옴
                     if (workbook.Workbook && workbook.Workbook.Views && workbook.Workbook.Views.length > 0) {
                         const activeTab = workbook.Workbook.Views[0].ActiveTab;
                         if (typeof activeTab === 'number' && workbook.SheetNames[activeTab]) {
                             targetSheetName = workbook.SheetNames[activeTab];
                             console.log(`활성 시트 감지됨: ${targetSheetName} (Index: ${activeTab})`);
                         }
+                    } else {
+                        console.log("활성 시트 정보 없음, 첫 번째 시트 사용:", targetSheetName);
                     }
                     
                     const worksheet = workbook.Sheets[targetSheetName];
