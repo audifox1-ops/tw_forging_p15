@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>생산기술 견적 검토 시스템</title>
-    <!-- Tailwind CSS for Styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- SheetJS (엑셀 변환 라이브러리) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
@@ -16,7 +19,7 @@
             <h1 class="text-3xl font-bold text-gray-900 mb-2">
                 <i class="fa-solid fa-industry text-blue-600 mr-2"></i>견적 검토 자동 분석 시스템
             </h1>
-            <p class="text-gray-500">엑셀(CSV) 파일을 업로드하면 형상, 치수, 여유치, Ingot을 자동으로 분석합니다.</p>
+            <p class="text-gray-500">엑셀(.xlsx) 또는 CSV 파일을 업로드하면 자동으로 변환하여 분석합니다.</p>
         </header>
 
         <!-- Upload Section -->
@@ -26,8 +29,8 @@
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                 </div>
                 <h3 class="text-xl font-semibold">파일을 이곳에 드래그하거나 클릭하여 업로드</h3>
-                <p class="text-sm text-gray-400">지원 형식: CSV, Excel(변환됨), PDF</p>
-                <input type="file" id="fileInput" class="hidden" accept=".csv,.pdf,image/*">
+                <p class="text-sm text-gray-400">지원 형식: .xlsx, .xls, .csv</p>
+                <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls">
                 <button onclick="document.getElementById('fileInput').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                     파일 선택하기
                 </button>
@@ -37,8 +40,8 @@
         <!-- Loading Indicator -->
         <div id="loading" class="hidden mt-8 text-center">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
-            <p class="mt-3 text-gray-600 font-medium">AI가 문서를 정밀 분석 중입니다...</p>
-            <p class="text-xs text-gray-400">데이터 패턴 인식 및 여유치 계산 중</p>
+            <p class="mt-3 text-gray-600 font-medium">데이터 변환 및 분석 중입니다...</p>
+            <p class="text-xs text-gray-400">엑셀 데이터 추출 -> AI 패턴 분석 -> 여유치 계산</p>
         </div>
 
         <!-- Result Section -->
@@ -84,40 +87,76 @@
         dropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropzone.classList.remove('border-blue-500', 'bg-blue-50');
-            if (e.dataTransfer.files.length) handleUpload(e.dataTransfer.files[0]);
+            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
         });
 
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) handleUpload(e.target.files[0]);
+            if (e.target.files.length) processFile(e.target.files[0]);
         });
 
-        async function handleUpload(file) {
+        // 엑셀 -> CSV 변환 및 업로드 처리 함수
+        async function processFile(file) {
             // UI Reset
             resultArea.classList.add('hidden');
             loading.classList.remove('hidden');
             tableBody.innerHTML = '';
             fileNameDisplay.textContent = file.name;
 
-            const formData = new FormData();
-            formData.append('file', file);
+            let fileToUpload = file;
 
             try {
-                // Call Vercel API Route
+                // 1. 엑셀 파일(.xlsx, .xls)인지 확인
+                if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                    console.log("엑셀 파일 감지: CSV 변환 시작");
+                    const arrayBuffer = await file.arrayBuffer();
+                    
+                    // SheetJS로 워크북 읽기
+                    const workbook = XLSX.read(arrayBuffer);
+                    
+                    // 첫 번째 시트 가져오기 (보통 여기에 데이터가 있음)
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // 시트 내용을 CSV 텍스트로 변환
+                    const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+                    
+                    // 변환된 CSV로 새로운 File 객체 생성
+                    fileToUpload = new File([csvContent], file.name.replace(/\.[^/.]+$/, ".csv"), {
+                        type: "text/csv",
+                    });
+                    console.log("CSV 변환 완료:", fileToUpload.name);
+                }
+
+                // 2. 백엔드로 전송
+                const formData = new FormData();
+                formData.append('file', fileToUpload);
+
+                // 주의: Vercel 배포 주소 또는 로컬 환경이 필요합니다.
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     body: formData
                 });
 
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `서버 오류 (${response.status})`);
+                }
+
                 const result = await response.json();
 
                 if (!result.success) {
-                    throw new Error(result.error || '분석 실패');
+                    throw new Error(result.error || '분석에 실패했습니다.');
                 }
 
                 renderTable(result.data.items);
 
             } catch (error) {
-                alert('에러 발생: ' + error.message);
+                let msg = error.message;
+                if (msg.includes('Failed to parse URL')) {
+                    msg = "API 서버를 찾을 수 없습니다. Vercel에 배포되었는지 확인해주세요.";
+                }
+                alert('오류 발생: ' + msg);
+                console.error(error);
             } finally {
                 loading.classList.add('hidden');
                 resultArea.classList.remove('hidden');
@@ -133,7 +172,7 @@
             items.forEach(item => {
                 const row = document.createElement('tr');
                 
-                // Helper to format dimensions
+                // 치수 포맷팅 헬퍼
                 const fmtDim = (dim) => {
                     if(!dim) return '-';
                     const parts = [];
@@ -146,10 +185,10 @@
                 };
 
                 row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.rowId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.rowId || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div class="font-bold text-gray-800">${item.productName}</div>
-                        <div class="text-xs">${item.material}</div>
+                        <div class="font-bold text-gray-800">${item.productName || 'Unknown'}</div>
+                        <div class="text-xs">${item.material || ''}</div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${fmtDim(item.inputSpec)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium text-blue-600">${fmtDim(item.outputSpec)}</td>
