@@ -30,7 +30,6 @@ export default async function handler(req: Request) {
 
   try {
     // 1. Vercel 환경 변수에서 구글 API 키 가져오기
-    // Vercel 대시보드 -> Settings -> Environment Variables에 'GEMINI_API_KEY'로 등록해야 함
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured in Vercel Settings');
@@ -91,15 +90,23 @@ export default async function handler(req: Request) {
     const isCsvOrText = file.type.includes('csv') || file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.csv');
     
     let parts = [];
-    parts.push({ text: systemPrompt }); // 시스템 지시사항 먼저 추가
+    parts.push({ text: systemPrompt }); 
 
     if (isCsvOrText) {
       const textContent = await file.text();
       parts.push({ text: `\n\n[FILE DATA START]\n파일명: ${file.name}\n${textContent}\n[FILE DATA END]` });
     } else {
       const arrayBuffer = await file.arrayBuffer();
-      // Google API용 Base64 (Standard)
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      
+      // Edge Runtime 호환 Base64 변환 (Buffer 대신 표준 API 사용으로 호환성 강화)
+      let binary = '';
+      const bytes = new Uint8Array(arrayBuffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      
       const mimeType = file.type || 'application/pdf';
       parts.push({
         inline_data: {
@@ -131,11 +138,11 @@ export default async function handler(req: Request) {
       throw new Error('AI 응답이 비어있습니다.');
     }
 
-    // JSON 파싱 (마크다운 제거)
+    // JSON 파싱 (마크다운 제거 및 유효성 검사)
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const extractedData = JSON.parse(content);
 
-    // items 배열이 없는 경우 처리
+    // items 배열 처리
     const items = extractedData.items || (Array.isArray(extractedData) ? extractedData : []);
 
     return new Response(
