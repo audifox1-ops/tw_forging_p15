@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>생산기술 견적 검토 시스템</title>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
     <!-- FontAwesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css)" rel="stylesheet">
     <!-- SheetJS (엑셀 변환) -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="[https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js](https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js)"></script>
     <!-- Tesseract.js (OCR) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js](https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js)"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
@@ -20,8 +20,10 @@
             <h1 class="text-3xl font-bold text-gray-900 mb-2">
                 <i class="fa-solid fa-industry text-blue-600 mr-2"></i>견적 검토 자동 분석 시스템
             </h1>
-            <p class="text-gray-500">엑셀(.xlsx) 파일을 업로드하거나 <strong>화면을 캡처하여 붙여넣기(Ctrl+V)</strong>하면 자동 분석합니다.</p>
-            <p class="text-xs text-blue-600 mt-2 font-semibold" id="envIndicator">* 현재 로컬/미리보기 모드로 작동 중입니다.</p>
+            <p class="text-gray-500">엑셀(.xlsx) 파일을 업로드하거나 <strong>화면을 캡처하여 붙여넣기(Ctrl+V)</strong>하세요.</p>
+            <div id="statusBadge" class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                <span class="w-2 h-2 mr-2 rounded-full bg-gray-400"></span> 대기 중
+            </div>
         </header>
 
         <div class="bg-white p-8 rounded-xl shadow-md border border-dashed border-gray-300 text-center hover:border-blue-500 transition-colors focus-within:border-blue-500" id="dropzone" tabindex="0">
@@ -29,10 +31,9 @@
                 <div class="text-5xl text-blue-100">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                 </div>
-                <h3 class="text-xl font-semibold">파일을 드래그하거나 <span class="text-blue-600">Ctrl+V</span>로 이미지를 붙여넣으세요</h3>
+                <h3 class="text-xl font-semibold">파일 드래그 또는 <span class="text-blue-600">Ctrl+V</span> (붙여넣기)</h3>
                 <div class="text-sm text-gray-400">
-                    <p>지원 형식: .xlsx, .xls, .csv, 이미지(PNG/JPG)</p>
-                    <p class="text-xs mt-1 text-blue-400 font-medium">✨ 캡처한 표나 도면의 치수를 자동으로 읽어냅니다 (OCR)</p>
+                    <p>지원: 엑셀(.xlsx), CSV, 이미지(도면 캡처)</p>
                 </div>
                 <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls,image/*">
                 <button onclick="document.getElementById('fileInput').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
@@ -41,34 +42,32 @@
             </div>
         </div>
 
+        <!-- Loading -->
         <div id="loading" class="hidden mt-8 text-center">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
-            <p class="mt-3 text-gray-600 font-medium" id="loadingTitle">데이터 분석 중...</p>
-            <p class="text-xs text-gray-400" id="loadingText">데이터 인식 중...</p>
+            <p class="mt-3 text-gray-600 font-medium" id="loadingTitle">분석 중...</p>
             <div id="ocrProgressContainer" class="hidden w-64 mx-auto mt-3 bg-gray-200 rounded-full h-2.5">
                 <div id="ocrProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
             </div>
         </div>
 
+        <!-- Results -->
         <div id="resultArea" class="hidden mt-8 space-y-6">
             <div class="flex justify-between items-center">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-800">📊 분석 결과</h2>
-                    <p class="text-xs text-gray-500 mt-1" id="sheetInfoDisplay"></p>
-                </div>
+                <h2 class="text-xl font-bold text-gray-800">📊 분석 결과</h2>
                 <span id="fileNameDisplay" class="text-sm bg-gray-200 px-3 py-1 rounded-full text-gray-600"></span>
             </div>
 
+            <!-- Simulation Notice -->
             <div id="simulationNotice" class="hidden bg-yellow-50 border-l-4 border-yellow-400 p-4">
                 <div class="flex">
                     <div class="flex-shrink-0">
-                        <i class="fa-solid fa-robot text-yellow-500"></i>
+                        <i class="fa-solid fa-triangle-exclamation text-yellow-400"></i>
                     </div>
                     <div class="ml-3">
                         <p class="text-sm text-yellow-700">
-                            <strong>[로컬/미리보기 모드 작동]</strong><br>
-                            서버(Vercel) 연결이 확인되지 않아 <strong>브라우저 자체 분석 엔진</strong>을 사용했습니다.<br>
-                            * 404 에러는 서버가 없어서 발생하는 정상적인 현상이며, 현재 모드에서는 무시됩니다.
+                            <strong>[미리보기 모드]</strong> 서버 연결에 실패하여 브라우저 자체 분석 결과를 표시합니다.<br>
+                            * Vercel 배포 후에는 AI 정밀 분석이 작동합니다.
                         </p>
                     </div>
                 </div>
@@ -78,13 +77,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No.</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">형상/재질</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품 치수 (Input)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">단조 치수 (Output)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">여유치 (자동계산)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingot / 회수율</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">비고</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No.</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">형상/재질</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">제품 치수 (Input)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">단조 치수 (Output)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">여유치</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ingot / 회수율</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">비고</th>
                         </tr>
                     </thead>
                     <tbody id="resultTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -97,317 +96,145 @@
         const fileInput = document.getElementById('fileInput');
         const dropzone = document.getElementById('dropzone');
         const loading = document.getElementById('loading');
-        const loadingTitle = document.getElementById('loadingTitle');
-        const loadingText = document.getElementById('loadingText');
         const resultArea = document.getElementById('resultArea');
         const tableBody = document.getElementById('resultTableBody');
-        const fileNameDisplay = document.getElementById('fileNameDisplay');
-        const sheetInfoDisplay = document.getElementById('sheetInfoDisplay');
-        const envIndicator = document.getElementById('envIndicator');
         const simulationNotice = document.getElementById('simulationNotice');
-        const ocrProgressContainer = document.getElementById('ocrProgressContainer');
-        const ocrProgressBar = document.getElementById('ocrProgressBar');
+        const statusBadge = document.getElementById('statusBadge');
+        
+        // 환경 감지
+        const isPreviewEnv = window.location.hostname.includes('lovable') || window.location.protocol === 'file:';
 
-        // 환경 확인 플래그
-        const isLocalOrPreview = window.location.protocol === 'file:' || window.location.protocol === 'blob:' || window.location.hostname.includes('lovable');
+        function updateStatus(msg, type = 'default') {
+            const colors = {
+                default: ['bg-gray-100', 'text-gray-600', 'bg-gray-400'],
+                loading: ['bg-blue-100', 'text-blue-600', 'bg-blue-400'],
+                success: ['bg-green-100', 'text-green-600', 'bg-green-400'],
+                error: ['bg-red-100', 'text-red-600', 'bg-red-400']
+            };
+            const c = colors[type];
+            statusBadge.className = `mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${c[0]} ${c[1]}`;
+            statusBadge.innerHTML = `<span class="w-2 h-2 mr-2 rounded-full ${c[2]}"></span> ${msg}`;
+        }
 
-        // Paste Event
-        document.addEventListener('paste', (event) => {
-            const items = event.clipboardData.items;
+        if (isPreviewEnv) updateStatus("로컬/미리보기 환경 (서버 없음)");
+
+        // Event Listeners
+        document.addEventListener('paste', handlePaste);
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('border-blue-500'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-blue-500'));
+        dropzone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropzone.classList.remove('border-blue-500');
+            if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', e => { if(e.target.files.length) processFile(e.target.files[0]); });
+
+        function handlePaste(e) {
+            const items = e.clipboardData.items;
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
-                    const blob = items[i].getAsFile();
-                    const file = new File([blob], `captured_image_${Date.now()}.png`, { type: blob.type });
-                    dropzone.classList.add('border-green-500', 'bg-green-50');
-                    setTimeout(() => dropzone.classList.remove('border-green-500', 'bg-green-50'), 500);
+                    const file = items[i].getAsFile();
                     processFile(file);
                     break;
                 }
             }
-        });
+        }
 
-        // Drag & Drop
-        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('border-blue-500', 'bg-blue-50'); });
-        dropzone.addEventListener('dragleave', () => { dropzone.classList.remove('border-blue-500', 'bg-blue-50'); });
-        dropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('border-blue-500', 'bg-blue-50');
-            if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) processFile(e.target.files[0]);
-        });
-
-        // --- Main Process ---
         async function processFile(file) {
+            // UI Reset
             resultArea.classList.add('hidden');
             simulationNotice.classList.add('hidden');
             loading.classList.remove('hidden');
-            ocrProgressContainer.classList.add('hidden');
-            loadingTitle.textContent = "파일 분석 중...";
-            loadingText.textContent = "데이터 읽는 중...";
             tableBody.innerHTML = '';
-            fileNameDisplay.textContent = file.name;
-            sheetInfoDisplay.textContent = '';
+            document.getElementById('fileNameDisplay').textContent = file.name;
+            updateStatus("데이터 분석 중...", "loading");
 
             let fileToUpload = file;
-            let textContentForSim = ""; 
+            let textContentForSim = "";
 
             try {
+                // 1. 파일 전처리 (엑셀/이미지 -> 텍스트 변환 준비)
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                    let targetSheetName = workbook.SheetNames[0];
-                    if (workbook.Workbook && workbook.Workbook.Views && workbook.Workbook.Views.length > 0) {
-                        const activeTab = workbook.Workbook.Views[0].ActiveTab;
-                        if (typeof activeTab === 'number' && workbook.SheetNames[activeTab]) {
-                            targetSheetName = workbook.SheetNames[activeTab];
-                        }
-                    }
-                    loadingText.textContent = `시트('${targetSheetName}') 데이터 변환 중...`;
-                    sheetInfoDisplay.textContent = `분석된 시트: ${targetSheetName}`;
-                    const worksheet = workbook.Sheets[targetSheetName];
-                    textContentForSim = XLSX.utils.sheet_to_csv(worksheet);
-                    fileToUpload = new File([textContentForSim], file.name.replace(/\.[^/.]+$/, ".csv"), { type: "text/csv" });
-                } 
-                else if (file.name.endsWith('.csv')) {
+                    const ab = await file.arrayBuffer();
+                    const wb = XLSX.read(ab);
+                    const sheet = wb.Sheets[wb.SheetNames[0]]; // 첫 시트 (간소화)
+                    textContentForSim = XLSX.utils.sheet_to_csv(sheet);
+                    fileToUpload = new File([textContentForSim], "data.csv", { type: "text/csv" });
+                } else if (file.type.startsWith('image/')) {
+                    const worker = await Tesseract.createWorker('eng');
+                    const ret = await worker.recognize(file);
+                    await worker.terminate();
+                    textContentForSim = ret.data.text;
+                    fileToUpload = new File([textContentForSim], "ocr.txt", { type: "text/plain" });
+                } else {
                     textContentForSim = await file.text();
                 }
-                else if (file.type.startsWith('image/')) {
-                    loadingTitle.textContent = "이미지 문자 인식(OCR) 중...";
-                    loadingText.textContent = "Tesseract 엔진 초기화...";
-                    ocrProgressContainer.classList.remove('hidden');
-                    sheetInfoDisplay.textContent = "이미지 OCR 분석 결과";
-                    
-                    // OCR 실행 (비동기)
-                    textContentForSim = await performOCR(file);
-                    
-                    fileToUpload = new File([textContentForSim], "ocr_result.txt", { type: "text/plain" });
-                }
 
-                if (isLocalOrPreview) {
-                    console.warn("로컬 환경: 시뮬레이션 모드 실행");
-                    await new Promise(r => setTimeout(r, 500));
-                    const simulatedItems = simulateAnalysis(textContentForSim, file.name);
-                    renderTable(simulatedItems);
-                    simulationNotice.classList.remove('hidden');
-                    return; 
-                }
+                // 2. 서버 전송 시도
+                if (isPreviewEnv) throw new Error("PREVIEW_MODE");
 
-                // Server Request
-                loadingTitle.textContent = "AI 서버 분석 요청 중...";
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
-                const response = await fetch('/api/analyze', { method: 'POST', body: formData });
-                if (!response.ok) {
-                    if (response.status === 404) throw new Error("API_NOT_FOUND");
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `서버 오류 (${response.status})`);
-                }
-                const result = await response.json();
-                if (!result.success) throw new Error(result.error || '분석 실패');
-                renderTable(result.data.items);
 
-            } catch (error) {
-                // 404 또는 Fetch 에러 발생 시 시뮬레이션 모드로 전환하여 사용자에게 결과 표시
-                if (error.message === "API_NOT_FOUND" || error.message.includes('Failed to parse URL') || error.message.includes('fetch')) {
-                    console.warn("서버 연결 실패 -> 시뮬레이션 모드 전환");
-                    const simulatedItems = simulateAnalysis(textContentForSim, file.name);
-                    renderTable(simulatedItems);
-                    simulationNotice.classList.remove('hidden');
-                } else {
-                    alert('오류 발생:\n' + error.message);
-                    console.error(error);
-                }
+                const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error(res.status === 404 ? "API_NOT_FOUND" : "SERVER_ERROR");
+                
+                const result = await res.json();
+                renderTable(result.data.items);
+                updateStatus("AI 분석 완료", "success");
+
+            } catch (err) {
+                // 3. 에러 발생 시 시뮬레이션 모드
+                console.warn("Falling back to simulation:", err.message);
+                
+                const simItems = simulateAnalysis(textContentForSim, file.name);
+                renderTable(simItems);
+                simulationNotice.classList.remove('hidden');
+                updateStatus("브라우저 자체 분석 완료", "error");
             } finally {
                 loading.classList.add('hidden');
                 resultArea.classList.remove('hidden');
             }
         }
 
-        // --- OCR Logic ---
-        async function performOCR(file) {
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        const pct = (m.progress * 100).toFixed(0) + '%';
-                        ocrProgressBar.style.width = pct;
-                        loadingText.textContent = `텍스트 판독 중... ${pct}`;
-                    }
-                }
-            });
-            const ret = await worker.recognize(file);
-            await worker.terminate();
-            console.log("OCR Result:", ret.data.text);
-            return ret.data.text;
-        }
-
-        // --- Simulation Logic ---
-        function simulateAnalysis(content, fileName) {
+        // 간단 시뮬레이션 로직 (서버 없을 때)
+        function simulateAnalysis(text, filename) {
+            const rows = text.split('\n');
             const items = [];
-            if (!content) return [];
-
-            // 텍스트 전처리 (OCR 오류 보정)
-            const cleanContent = content.replace(/O/g, '0').replace(/l/g, '1');
-            const rows = cleanContent.split('\n');
-            
-            let shape = "UNKNOWN";
-            const upperName = fileName.toUpperCase();
-            const upperContent = cleanContent.toUpperCase();
-            
-            if (upperName.includes('SQUARE') || upperContent.includes('SQ') || upperContent.includes('W')) shape = "SQUARE";
-            else if (upperName.includes('SHAFT') || upperName.includes('ROUND')) shape = "SHAFT";
-            else if (upperName.includes('RING')) shape = "RING";
-            else if (upperName.includes('SHELL')) shape = "SHELL";
-            else if (upperName.includes('DISC') || upperName.includes('DISK')) shape = "DISC";
-            else if (upperName.includes('화공기') || upperContent.includes('OD')) shape = "화공기";
-
-            rows.forEach((row, idx) => {
-                // 숫자 추출 (소수점 포함)
-                // 콤마 제거 후 공백 기준 분리 등 다양한 포맷 대응
-                const rawCols = row.replace(/,/g, ' ').split(/\s+/);
-                const nums = rawCols.map(c => parseFloat(c)).filter(n => !isNaN(n) && n > 0);
-                
-                // 유효 데이터 행 판단 (숫자가 3개 이상)
-                if (nums.length >= 3) {
-                    // 필터링: 0보다 큰 수만
-                    const validNums = nums.filter(n => n > 0);
-                    if (validNums.length < 3) return;
-
-                    let inputSpec = {}, outputSpec = {}, allowanceSpec = null;
-                    let weight = 0;
-                    
-                    // 중량(1000 이상, 밀도 제외)
-                    const bigNums = validNums.filter(n => n > 1000);
-                    weight = bigNums.length > 0 ? Math.max(...bigNums) : 0;
-                    
-                    // 치수 후보 (중량 제외)
-                    const dims = validNums.filter(n => n < 10000 && n !== 7.85 && n !== 0.68);
-                    
-                    if (dims.length >= 3) {
-                        const i1 = dims[0] || 0;
-                        const i2 = dims[1] || 0;
-                        const i3 = dims[2] || 0;
-
-                        // 출력 치수 (없으면 임의 계산)
-                        let o1 = i1, o2 = i2, o3 = i3;
-                        if (dims.length >= 6) {
-                            o1 = dims[dims.length-3];
-                            o2 = dims[dims.length-2];
-                            o3 = dims[dims.length-1];
-                        } else {
-                            o1 = i1 + 50; 
-                            o2 = i2; 
-                            o3 = i3 + 50;
-                        }
-
-                        if (shape === 'SQUARE') {
-                            inputSpec = { length: i1, width: i2, thickness: i3 };
-                            outputSpec = { length: o1, width: o2, thickness: o3 };
-                        } else {
-                            inputSpec = { od: i1, id: i2, length: i3 };
-                            outputSpec = { od: o1, id: o2, length: o3 };
-                        }
-
-                        // Ingot & Yield
-                        const ingotMatch = row.match(/\d{3}[A-Z]/);
-                        const ingotCode = ingotMatch ? ingotMatch[0] : "-";
-                        const yieldVal = validNums.find(n => n > 0.3 && n < 1.0) || 0.68;
-
-                        items.push({
-                            rowId: idx + 1,
-                            productName: shape,
-                            material: row.match(/[A-Z]{2,}\d+/)?.[0] || 'Unknown',
-                            inputSpec: inputSpec,
-                            outputSpec: outputSpec,
-                            allowanceSpec: null, 
-                            weight: weight,
-                            ingotType: ingotCode,
-                            recoveryRate: yieldVal,
-                            note: `패턴 분석 결과`
-                        });
-                    }
+            rows.forEach((r, i) => {
+                const nums = r.match(/\d+(\.\d+)?/g)?.map(Number) || [];
+                if (nums.length >= 6) { // 숫자 6개 이상이면 데이터로 간주
+                    items.push({
+                        rowId: i+1,
+                        productName: filename.includes('SHAFT') ? 'SHAFT' : 'SQUARE',
+                        material: 'SA266',
+                        inputSpec: { od: nums[0], id: nums[1], length: nums[2] },
+                        outputSpec: { od: nums[3], id: nums[4], length: nums[5] },
+                        weight: Math.max(...nums),
+                        note: "시뮬레이션 데이터"
+                    });
                 }
             });
-
-            // 데이터 없으면 원본 텍스트라도 표시
-            if (items.length === 0 && cleanContent.trim().length > 0) {
-                items.push({
-                    rowId: "RAW",
-                    productName: "TEXT_DETECTED",
-                    material: "-",
-                    inputSpec: {}, outputSpec: {},
-                    weight: 0,
-                    note: "텍스트 인식됨: " + cleanContent.substring(0, 50).replace(/\n/g, ' ') + "..."
-                });
-            }
-
-            return items;
+            return items.length ? items : [{ rowId: "-", note: "데이터 패턴 인식 실패 (서버 배포 필요)" }];
         }
 
         function renderTable(items) {
-            if (!items || items.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">분석 가능한 데이터를 찾지 못했습니다.</td></tr>';
-                return;
-            }
+            tableBody.innerHTML = items.map(item => `
+                <tr>
+                    <td class="px-6 py-4 text-sm text-gray-900">${item.rowId || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${item.productName || ''}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${fmt(item.inputSpec)}</td>
+                    <td class="px-6 py-4 text-sm text-blue-600 font-medium">${fmt(item.outputSpec)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${fmt(item.allowanceSpec) || 'Auto'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${item.ingotType || '-'} / ${item.recoveryRate || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 truncate max-w-xs">${item.note || ''}</td>
+                </tr>
+            `).join('');
+        }
 
-            items.forEach(item => {
-                const row = document.createElement('tr');
-                
-                const fmtDim = (dim) => {
-                    if(!dim) return '-';
-                    const parts = [];
-                    if(dim.od) parts.push(`OD ${dim.od}`);
-                    if(dim.id) parts.push(`ID ${dim.id}`);
-                    if(dim.length) parts.push(`L ${dim.length}`);
-                    if(dim.width) parts.push(`W ${dim.width}`);
-                    if(dim.thickness) parts.push(`T ${dim.thickness}`);
-                    return parts.length > 0 ? parts.join(' / ') : '-';
-                };
-
-                let allowanceDisplay = 'Auto';
-                if (item.inputSpec && item.outputSpec) {
-                    const diffs = [];
-                    const keys = ['od', 'id', 'length', 'width', 'thickness'];
-                    keys.forEach(k => {
-                        if (item.inputSpec[k] && item.outputSpec[k]) {
-                            const diff = item.outputSpec[k] - item.inputSpec[k];
-                            if (Math.abs(diff) > 0.1) {
-                                let label = k.charAt(0).toUpperCase();
-                                if(k==='thickness') label='T';
-                                if(k==='width') label='W';
-                                diffs.push(`${label}+${diff.toFixed(1)}`);
-                            }
-                        }
-                    });
-                    if (diffs.length > 0) allowanceDisplay = diffs.join(' / ');
-                }
-
-                row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.rowId || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div class="font-bold text-gray-800">${item.productName || 'Unknown'}</div>
-                        <div class="text-xs">${item.material || ''}</div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${fmtDim(item.inputSpec)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium text-blue-600">${fmtDim(item.outputSpec)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                            ${allowanceDisplay}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div class="font-bold">${item.ingotType || '-'}</div>
-                        <div class="text-xs">회수율: ${item.recoveryRate ? (item.recoveryRate * 100).toFixed(0) + '%' : '-'}</div>
-                        <div class="text-xs text-gray-400">${item.weight ? item.weight.toLocaleString() + 'kg' : ''}</div>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${item.note}">
-                        ${item.note || '-'}
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
+        function fmt(dim) {
+            if (!dim) return '-';
+            return Object.entries(dim).map(([k, v]) => `${k.toUpperCase().substr(0,1)}:${v}`).join(' ');
         }
     </script>
 </body>
