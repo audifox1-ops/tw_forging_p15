@@ -1,0 +1,9 @@
+{
+  "name": "estimate-analyzer",
+  "version": "1.0.0",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
