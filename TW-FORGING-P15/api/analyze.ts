@@ -1,10 +1,10 @@
 export const config = {
-  runtime: 'edge', // Vercel Edge Function
+  runtime: 'edge', // Vercel Edge Function (빠르고 가벼운 서버리스 환경)
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-// CORS 설정
+// CORS 설정 (프론트엔드에서의 접근 허용)
 const getCorsHeaders = (origin: string | null) => {
   return {
     'Access-Control-Allow-Origin': origin || '*',
@@ -17,10 +17,12 @@ export default async function handler(req: Request) {
   const origin = req.headers.get('Origin');
   const corsHeaders = getCorsHeaders(origin);
 
+  // 1. Preflight 요청 처리 (CORS)
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // 2. POST 요청만 허용
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
       status: 405,
@@ -29,12 +31,13 @@ export default async function handler(req: Request) {
   }
 
   try {
-    // 1. Vercel 환경 변수에서 구글 API 키 가져오기
+    // 3. API 키 확인 (Vercel 환경변수)
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured in Vercel Settings');
     }
 
+    // 4. 파일 데이터 수신
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
@@ -45,7 +48,14 @@ export default async function handler(req: Request) {
       });
     }
 
-    // 2. 프롬프트 작성 (AI에게 내리는 지시사항) - 강력한 분석 로직 적용
+    if (file.size > MAX_FILE_SIZE) {
+      return new Response(JSON.stringify({ error: 'File too large (Max 10MB)' }), {
+        status: 413,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 5. AI 프롬프트 (분석 지시사항)
     const systemPrompt = `
     당신은 제조업 생산기술부의 '견적 검토 및 물량 산출 AI'입니다. 
     제공된 데이터는 엑셀/CSV 파일 내용이거나 이미지입니다.
@@ -70,12 +80,12 @@ export default async function handler(req: Request) {
        - 문서에 '여유치' 값이 명시되어 있으면 추출하세요.
        - **값이 없거나 0이면:** (단조 치수 - 제품 치수)를 계산하여 '전체 여유치'로 적용하세요.
 
-    3. **Ingot & 회수율 (핵심):**
+    3. **Ingot & 회수율 (핵심 로직):**
        - **회수율(Yield/Recovery):** '회수율', '수율', 'Yield', 'Recovery' 헤더 아래 값을 찾으세요.
          - 값의 형식은 **0.xx (소수점)** 또는 **xx% (백분율)** 입니다. (예: 0.68, 72%)
-         - 유효 범위(0.5 ~ 0.99)가 아니거나 값이 없으면 **기본값 0.68**을 적용하세요.
+         - 만약 값이 없거나 유효 범위(0.5 ~ 0.99)가 아니면 **기본값 0.68**을 적용하세요.
        - **Ingot Type:** 숫자 3자리+알파벳(예: 101C, 566F, 168F) 코드를 찾으세요.
-       - **검증:** (단조 중량 / 회수율) = 필요 Ingot 중량. 이 중량을 만족하는 Ingot Type인지 확인하세요.
+       - **검증:** (단조 중량 / 회수율) = 필요 Ingot 중량. 추출한 Ingot Type이 이 중량을 만족하는지 확인하고 비고에 기록하세요.
 
     **[응답 형식 (JSON Only)]**
     반드시 아래 JSON 포맷만 출력하세요. 마크다운(```json) 쓰지 마세요.
@@ -98,7 +108,7 @@ export default async function handler(req: Request) {
     }
     `;
 
-    // 3. Google Gemini API 요청 생성
+    // 6. 데이터 전처리 및 Google API 호출
     const isCsvOrText = file.type.includes('csv') || file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.csv');
     
     let parts = [];
@@ -109,7 +119,8 @@ export default async function handler(req: Request) {
       parts.push({ text: `\n\n[FILE DATA START]\n파일명: ${file.name}\n${textContent}\n[FILE DATA END]` });
     } else {
       const arrayBuffer = await file.arrayBuffer();
-      // Edge Runtime 호환 Base64 변환
+      
+      // [중요] Edge Runtime 호환성을 위한 표준 Base64 변환 (Buffer 사용 안 함)
       let binary = '';
       const bytes = new Uint8Array(arrayBuffer);
       const len = bytes.byteLength;
@@ -149,11 +160,11 @@ export default async function handler(req: Request) {
       throw new Error('AI 응답이 비어있습니다.');
     }
 
-    // JSON 파싱 (마크다운 제거 및 유효성 검사)
+    // 7. 결과 파싱 (JSON 추출)
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const extractedData = JSON.parse(content);
 
-    // items 배열 처리
+    // items 배열 안전하게 추출
     const items = extractedData.items || (Array.isArray(extractedData) ? extractedData : []);
 
     return new Response(
