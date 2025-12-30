@@ -45,25 +45,37 @@ export default async function handler(req: Request) {
       });
     }
 
-    // 2. 프롬프트 작성 (AI에게 내리는 지시사항)
+    // 2. 프롬프트 작성 (AI에게 내리는 지시사항) - 강력한 분석 로직 적용
     const systemPrompt = `
     당신은 제조업 생산기술부의 '견적 검토 및 물량 산출 AI'입니다. 
     제공된 데이터는 엑셀/CSV 파일 내용이거나 이미지입니다.
     이 데이터에서 **'선택된 시트'의 값**을 분석하여 형상, 치수, 여유치, Ingot 정보를 추출하세요.
 
-    **[분석 미션]**
-    1. **형상(Shape):** 파일명이나 데이터 헤더(W, T, OD, ID)를 보고 결정 (SQUARE, SHAFT, RING, SHELL, DISC).
-    2. **데이터 행 식별:** #, 숫자, 코드로 시작하는 유효 행만 분석 (헤더 제외).
-    3. **패턴 인식:**
-       - **제품 치수:** 행 앞쪽의 연속된 숫자 3개.
-       - **단조 치수:** 행 중간/뒤쪽의 연속된 숫자 3개 (제품보다 큼).
-       - **여유치:** 없으면 (단조 - 제품)으로 자동 계산.
-    4. **Ingot & 회수율 (중요):**
-       - **회수율(Yield/Recovery):** '회수율', '수율', 'Yield', 'Recovery' 등의 헤더 아래에 있는 값을 찾으세요.
+    **[분석 미션 1: 형상(Shape) 판단]**
+    파일명과 데이터 헤더를 최우선으로 분석하세요.
+    - **SQUARE / BLOCK:** 파일명에 'SQUARE', 'BLOCK' 포함 또는 헤더에 'W(폭)', 'T(두께)' 존재.
+    - **SHAFT:** 파일명에 'SHAFT', 'ROUND' 포함 또는 길이(L)가 외경(OD)보다 월등히 김.
+    - **RING / SHELL:** 파일명에 'RING', 'SHELL' 포함. (내경 ID 존재)
+    - **DISC:** 파일명에 'DISC' 포함. (내경 ID가 없거나 0)
+    - **화공기:** 파일명에 '화공기', 'TUBE SHEET' 포함.
+
+    **[분석 미션 2: 데이터 추출]**
+    데이터 행(Row)은 '#', 숫자(1,2...), 코드(P001)로 시작합니다. 헤더는 제외하세요.
+    
+    1. **치수 (Dimensions):**
+       - **제품 치수 (Input):** 행 앞쪽에 위치한 연속된 숫자 3개.
+       - **단조 치수 (Output):** 행 중간/뒤쪽에 위치한 연속된 숫자 3개 (제품 치수보다 큼).
+    
+    2. **여유치 (Allowance):**
+       - 문서에 '여유치' 값이 명시되어 있으면 추출하세요.
+       - **값이 없거나 0이면:** (단조 치수 - 제품 치수)를 계산하여 '전체 여유치'로 적용하세요.
+
+    3. **Ingot & 회수율 (핵심):**
+       - **회수율(Yield/Recovery):** '회수율', '수율', 'Yield', 'Recovery' 헤더 아래 값을 찾으세요.
          - 값의 형식은 **0.xx (소수점)** 또는 **xx% (백분율)** 입니다. (예: 0.68, 72%)
-         - 회수율은 보통 Ingot Type이나 중량 데이터 근처에 위치합니다.
-         - 만약 값이 없거나 유효한 범위(0.5 ~ 1.0)를 벗어난 경우, **기본값 0.68**을 적용하고 비고에 '기본 회수율 적용'이라고 적으세요.
-       - **Ingot Type:** 숫자 3자리+알파벳(예: 101C) 코드를 찾으세요. 없으면 (중량 / 회수율) 계산하여 비고에 기록.
+         - 유효 범위(0.5 ~ 0.99)가 아니거나 값이 없으면 **기본값 0.68**을 적용하세요.
+       - **Ingot Type:** 숫자 3자리+알파벳(예: 101C, 566F, 168F) 코드를 찾으세요.
+       - **검증:** (단조 중량 / 회수율) = 필요 Ingot 중량. 이 중량을 만족하는 Ingot Type인지 확인하세요.
 
     **[응답 형식 (JSON Only)]**
     반드시 아래 JSON 포맷만 출력하세요. 마크다운(```json) 쓰지 마세요.
@@ -80,7 +92,7 @@ export default async function handler(req: Request) {
           "ingotType": "101C",
           "recoveryRate": 0.68,
           "calculatedIngotWeight": 1766.17,
-          "note": "여유치 자동 계산됨."
+          "note": "여유치 250mm 자동 계산됨. 회수율 68% 적용."
         }
       ]
     }
@@ -97,8 +109,7 @@ export default async function handler(req: Request) {
       parts.push({ text: `\n\n[FILE DATA START]\n파일명: ${file.name}\n${textContent}\n[FILE DATA END]` });
     } else {
       const arrayBuffer = await file.arrayBuffer();
-      
-      // Edge Runtime 호환 Base64 변환 (Buffer 대신 표준 API 사용으로 호환성 강화)
+      // Edge Runtime 호환 Base64 변환
       let binary = '';
       const bytes = new Uint8Array(arrayBuffer);
       const len = bytes.byteLength;
