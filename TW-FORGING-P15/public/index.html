@@ -4,14 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>생산기술 견적 검토 시스템</title>
-    <!-- Tailwind CSS -->
-    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-    <!-- FontAwesome -->
-    <link href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css)" rel="stylesheet">
-    <!-- SheetJS (엑셀 변환) -->
-    <script src="[https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js](https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js)"></script>
-    <!-- Tesseract.js (OCR) -->
-    <script src="[https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js](https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js)"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
@@ -20,70 +16,38 @@
             <h1 class="text-3xl font-bold text-gray-900 mb-2">
                 <i class="fa-solid fa-industry text-blue-600 mr-2"></i>견적 검토 자동 분석 시스템
             </h1>
-            <p class="text-gray-500">엑셀(.xlsx) 파일을 업로드하거나 <strong>화면을 캡처하여 붙여넣기(Ctrl+V)</strong>하세요.</p>
-            <div id="statusBadge" class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                <span class="w-2 h-2 mr-2 rounded-full bg-gray-400"></span> 대기 중
-            </div>
+            <p class="text-gray-500">엑셀(.xlsx) 파일 업로드 또는 <strong>화면 캡처 붙여넣기(Ctrl+V)</strong></p>
+            <!-- 환경 상태 표시 -->
+            <div id="envStatus" class="mt-2 text-sm font-bold"></div>
         </header>
 
-        <div class="bg-white p-8 rounded-xl shadow-md border border-dashed border-gray-300 text-center hover:border-blue-500 transition-colors focus-within:border-blue-500" id="dropzone" tabindex="0">
+        <div class="bg-white p-8 rounded-xl shadow-md border border-dashed border-gray-300 text-center hover:border-blue-500 transition-colors" id="dropzone">
             <div class="space-y-4">
-                <div class="text-5xl text-blue-100">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                </div>
-                <h3 class="text-xl font-semibold">파일 드래그 또는 <span class="text-blue-600">Ctrl+V</span> (붙여넣기)</h3>
-                <div class="text-sm text-gray-400">
-                    <p>지원: 엑셀(.xlsx), CSV, 이미지(도면 캡처)</p>
-                </div>
+                <div class="text-5xl text-blue-100"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <h3 class="text-xl font-semibold">파일 드래그 또는 <span class="text-blue-600">Ctrl+V</span></h3>
                 <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls,image/*">
-                <button onclick="document.getElementById('fileInput').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                    파일 선택하기
-                </button>
+                <button onclick="document.getElementById('fileInput').click()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">파일 선택</button>
             </div>
         </div>
 
-        <!-- Loading -->
         <div id="loading" class="hidden mt-8 text-center">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
-            <p class="mt-3 text-gray-600 font-medium" id="loadingTitle">분석 중...</p>
-            <div id="ocrProgressContainer" class="hidden w-64 mx-auto mt-3 bg-gray-200 rounded-full h-2.5">
-                <div id="ocrProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-            </div>
+            <p class="mt-3 text-gray-600" id="loadingText">분석 중...</p>
         </div>
 
-        <!-- Results -->
         <div id="resultArea" class="hidden mt-8 space-y-6">
-            <div class="flex justify-between items-center">
-                <h2 class="text-xl font-bold text-gray-800">📊 분석 결과</h2>
-                <span id="fileNameDisplay" class="text-sm bg-gray-200 px-3 py-1 rounded-full text-gray-600"></span>
-            </div>
-
-            <!-- Simulation Notice -->
-            <div id="simulationNotice" class="hidden bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="fa-solid fa-triangle-exclamation text-yellow-400"></i>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-yellow-700">
-                            <strong>[미리보기 모드]</strong> 서버 연결에 실패하여 브라우저 자체 분석 결과를 표시합니다.<br>
-                            * Vercel 배포 후에는 AI 정밀 분석이 작동합니다.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
+            <h2 class="text-xl font-bold text-gray-800">📊 분석 결과</h2>
             <div class="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No.</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">형상/재질</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">제품 치수 (Input)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">단조 치수 (Output)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">여유치</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ingot / 회수율</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">비고</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">No.</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">형상/재질</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">제품 치수</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">단조 치수</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">여유치</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Ingot / 회수율</th>
+                            <th class="px-6 py-3 text-xs font-medium text-gray-500 uppercase">비고</th>
                         </tr>
                     </thead>
                     <tbody id="resultTableBody" class="bg-white divide-y divide-gray-200"></tbody>
@@ -93,148 +57,112 @@
     </div>
 
     <script>
+        // 환경 감지 로직
+        const isVercel = window.location.hostname.includes('vercel.app');
+        const envBadge = document.getElementById('envStatus');
+        
+        if (isVercel) {
+            envBadge.innerHTML = '<span class="text-green-600">✅ Vercel 배포 환경 (서버 정상 작동)</span>';
+        } else {
+            envBadge.innerHTML = '<span class="text-orange-500">⚠️ 미리보기 환경 (서버 없음 - 분석 시뮬레이션 모드)</span>';
+        }
+
         const fileInput = document.getElementById('fileInput');
         const dropzone = document.getElementById('dropzone');
         const loading = document.getElementById('loading');
         const resultArea = document.getElementById('resultArea');
         const tableBody = document.getElementById('resultTableBody');
-        const simulationNotice = document.getElementById('simulationNotice');
-        const statusBadge = document.getElementById('statusBadge');
-        
-        // 환경 감지
-        const isPreviewEnv = window.location.hostname.includes('lovable') || window.location.protocol === 'file:';
 
-        function updateStatus(msg, type = 'default') {
-            const colors = {
-                default: ['bg-gray-100', 'text-gray-600', 'bg-gray-400'],
-                loading: ['bg-blue-100', 'text-blue-600', 'bg-blue-400'],
-                success: ['bg-green-100', 'text-green-600', 'bg-green-400'],
-                error: ['bg-red-100', 'text-red-600', 'bg-red-400']
-            };
-            const c = colors[type];
-            statusBadge.className = `mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${c[0]} ${c[1]}`;
-            statusBadge.innerHTML = `<span class="w-2 h-2 mr-2 rounded-full ${c[2]}"></span> ${msg}`;
-        }
-
-        if (isPreviewEnv) updateStatus("로컬/미리보기 환경 (서버 없음)");
-
-        // Event Listeners
-        document.addEventListener('paste', handlePaste);
-        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('border-blue-500'); });
-        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-blue-500'));
-        dropzone.addEventListener('drop', e => {
-            e.preventDefault();
-            dropzone.classList.remove('border-blue-500');
-            if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener('change', e => { if(e.target.files.length) processFile(e.target.files[0]); });
-
-        function handlePaste(e) {
+        // 이벤트 리스너
+        document.addEventListener('paste', e => {
             const items = e.clipboardData.items;
-            for (let i = 0; i < items.length; i++) {
+            for (let i=0; i<items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
-                    const file = items[i].getAsFile();
-                    processFile(file);
+                    processFile(items[i].getAsFile());
                     break;
                 }
             }
-        }
+        });
+        fileInput.addEventListener('change', e => { if(e.target.files.length) processFile(e.target.files[0]); });
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('border-blue-500'); });
+        dropzone.addEventListener('drop', e => { 
+            e.preventDefault(); dropzone.classList.remove('border-blue-500');
+            if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); 
+        });
 
         async function processFile(file) {
-            // UI Reset
-            resultArea.classList.add('hidden');
-            simulationNotice.classList.add('hidden');
             loading.classList.remove('hidden');
-            tableBody.innerHTML = '';
-            document.getElementById('fileNameDisplay').textContent = file.name;
-            updateStatus("데이터 분석 중...", "loading");
-
-            let fileToUpload = file;
-            let textContentForSim = "";
+            resultArea.classList.add('hidden');
+            let uploadFile = file;
 
             try {
-                // 1. 파일 전처리 (엑셀/이미지 -> 텍스트 변환 준비)
+                // 1. 전처리 (엑셀/이미지 -> 텍스트 변환)
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
                     const ab = await file.arrayBuffer();
                     const wb = XLSX.read(ab);
-                    const sheet = wb.Sheets[wb.SheetNames[0]]; // 첫 시트 (간소화)
-                    textContentForSim = XLSX.utils.sheet_to_csv(sheet);
-                    fileToUpload = new File([textContentForSim], "data.csv", { type: "text/csv" });
+                    // Active Sheet 찾기
+                    let sheetName = wb.SheetNames[0];
+                    if (wb.Workbook?.Views?.[0]?.ActiveTab) {
+                        sheetName = wb.SheetNames[wb.Workbook.Views[0].ActiveTab] || sheetName;
+                    }
+                    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
+                    uploadFile = new File([csv], "data.csv", { type: "text/csv" });
                 } else if (file.type.startsWith('image/')) {
+                    document.getElementById('loadingText').innerText = "이미지 글자 인식(OCR) 중...";
                     const worker = await Tesseract.createWorker('eng');
                     const ret = await worker.recognize(file);
                     await worker.terminate();
-                    textContentForSim = ret.data.text;
-                    fileToUpload = new File([textContentForSim], "ocr.txt", { type: "text/plain" });
-                } else {
-                    textContentForSim = await file.text();
+                    uploadFile = new File([ret.data.text], "ocr.txt", { type: "text/plain" });
                 }
 
-                // 2. 서버 전송 시도
-                if (isPreviewEnv) throw new Error("PREVIEW_MODE");
+                // 2. 서버 전송
+                if (!isVercel) {
+                    // 미리보기 환경일 땐 가짜 데이터 보여줌 (에러 방지)
+                    await new Promise(r => setTimeout(r, 1000));
+                    alert("현재는 미리보기 환경이라 AI 분석 서버가 없습니다.\n임시 시뮬레이션 결과를 표시합니다.");
+                    renderTable([{ 
+                        rowId: "Test", productName: "SHAFT (Test)", material: "SA266",
+                        inputSpec: {od:100, length:500}, outputSpec: {od:120, length:550},
+                        note: "실제 분석은 Vercel 배포 사이트에서 하세요." 
+                    }]);
+                    return;
+                }
 
+                document.getElementById('loadingText').innerText = "AI 분석 요청 중...";
                 const formData = new FormData();
-                formData.append('file', fileToUpload);
+                formData.append('file', uploadFile);
 
                 const res = await fetch('/api/analyze', { method: 'POST', body: formData });
-                if (!res.ok) throw new Error(res.status === 404 ? "API_NOT_FOUND" : "SERVER_ERROR");
+                if (!res.ok) throw new Error(await res.text());
                 
                 const result = await res.json();
                 renderTable(result.data.items);
-                updateStatus("AI 분석 완료", "success");
 
             } catch (err) {
-                // 3. 에러 발생 시 시뮬레이션 모드
-                console.warn("Falling back to simulation:", err.message);
-                
-                const simItems = simulateAnalysis(textContentForSim, file.name);
-                renderTable(simItems);
-                simulationNotice.classList.remove('hidden');
-                updateStatus("브라우저 자체 분석 완료", "error");
+                alert("오류: " + err.message);
             } finally {
                 loading.classList.add('hidden');
                 resultArea.classList.remove('hidden');
             }
         }
 
-        // 간단 시뮬레이션 로직 (서버 없을 때)
-        function simulateAnalysis(text, filename) {
-            const rows = text.split('\n');
-            const items = [];
-            rows.forEach((r, i) => {
-                const nums = r.match(/\d+(\.\d+)?/g)?.map(Number) || [];
-                if (nums.length >= 6) { // 숫자 6개 이상이면 데이터로 간주
-                    items.push({
-                        rowId: i+1,
-                        productName: filename.includes('SHAFT') ? 'SHAFT' : 'SQUARE',
-                        material: 'SA266',
-                        inputSpec: { od: nums[0], id: nums[1], length: nums[2] },
-                        outputSpec: { od: nums[3], id: nums[4], length: nums[5] },
-                        weight: Math.max(...nums),
-                        note: "시뮬레이션 데이터"
-                    });
-                }
-            });
-            return items.length ? items : [{ rowId: "-", note: "데이터 패턴 인식 실패 (서버 배포 필요)" }];
-        }
-
         function renderTable(items) {
             tableBody.innerHTML = items.map(item => `
                 <tr>
-                    <td class="px-6 py-4 text-sm text-gray-900">${item.rowId || '-'}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">${item.productName || ''}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">${fmt(item.inputSpec)}</td>
-                    <td class="px-6 py-4 text-sm text-blue-600 font-medium">${fmt(item.outputSpec)}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">${fmt(item.allowanceSpec) || 'Auto'}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">${item.ingotType || '-'} / ${item.recoveryRate || '-'}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500 truncate max-w-xs">${item.note || ''}</td>
+                    <td class="px-6 py-4 text-sm">${item.rowId || '-'}</td>
+                    <td class="px-6 py-4 text-sm font-bold">${item.productName}</td>
+                    <td class="px-6 py-4 text-sm">${fmt(item.inputSpec)}</td>
+                    <td class="px-6 py-4 text-sm text-blue-600">${fmt(item.outputSpec)}</td>
+                    <td class="px-6 py-4 text-sm">${fmt(item.allowanceSpec) || 'Auto'}</td>
+                    <td class="px-6 py-4 text-sm">${item.ingotType || '-'} / ${item.recoveryRate || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${item.note || ''}</td>
                 </tr>
             `).join('');
         }
 
-        function fmt(dim) {
-            if (!dim) return '-';
-            return Object.entries(dim).map(([k, v]) => `${k.toUpperCase().substr(0,1)}:${v}`).join(' ');
+        function fmt(obj) {
+            if (!obj) return '-';
+            return Object.values(obj).join(' / ');
         }
     </script>
 </body>
