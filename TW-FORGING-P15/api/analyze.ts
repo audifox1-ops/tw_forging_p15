@@ -17,6 +17,7 @@ export default async function handler(req: Request) {
   const origin = req.headers.get('Origin');
   const corsHeaders = getCorsHeaders(origin);
 
+  // 1. Preflight 및 Method 체크
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -29,10 +30,13 @@ export default async function handler(req: Request) {
   }
 
   try {
-    // 1. Vercel 환경 변수에서 구글 API 키 가져오기
+    console.log('[API] 분석 요청 시작'); // 로그 추가
+
+    // 2. API 키 확인
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-      throw new Error('GEMINI_API_KEY is not configured in Vercel Settings');
+      console.error('[API Error] GEMINI_API_KEY 미설정');
+      throw new Error('GEMINI_API_KEY is not configured');
     }
 
     const formData = await req.formData();
@@ -45,7 +49,9 @@ export default async function handler(req: Request) {
       });
     }
 
-    // 2. 프롬프트 작성 (AI에게 내리는 지시사항) - 강력한 분석 로직 적용
+    console.log(`[API] 파일 수신: ${file.name} (${file.type}, ${file.size} bytes)`);
+
+    // 3. AI 프롬프트 (회수율 및 Ingot 로직 포함)
     const systemPrompt = `
     당신은 제조업 생산기술부의 '견적 검토 및 물량 산출 AI'입니다. 
     제공된 데이터는 엑셀/CSV 파일 내용이거나 이미지입니다.
@@ -98,7 +104,7 @@ export default async function handler(req: Request) {
     }
     `;
 
-    // 3. Google Gemini API 요청 생성
+    // 4. 데이터 전처리 (CSV 텍스트 or 이미지 Base64)
     const isCsvOrText = file.type.includes('csv') || file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.csv');
     
     let parts = [];
@@ -109,8 +115,7 @@ export default async function handler(req: Request) {
       parts.push({ text: `\n\n[FILE DATA START]\n파일명: ${file.name}\n${textContent}\n[FILE DATA END]` });
     } else {
       const arrayBuffer = await file.arrayBuffer();
-      
-      // Edge Runtime 호환 Base64 변환 (Buffer 대신 표준 API 사용)
+      // 표준 Web API (btoa) 사용 - Vercel Edge 호환
       let binary = '';
       const bytes = new Uint8Array(arrayBuffer);
       const len = bytes.byteLength;
@@ -128,7 +133,8 @@ export default async function handler(req: Request) {
       });
     }
 
-    // Google Gemini API 호출
+    // 5. Google Gemini API 호출
+    console.log('[API] Google Gemini 호출 중...');
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,8 +145,8 @@ export default async function handler(req: Request) {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('Gemini API Error:', errText);
-      throw new Error(`Google API Error: ${response.status}`);
+      console.error('[API Error] Gemini 응답 실패:', errText);
+      throw new Error(`Google API Error: ${response.status} - ${errText}`);
     }
 
     const aiResult = await response.json();
@@ -150,11 +156,11 @@ export default async function handler(req: Request) {
       throw new Error('AI 응답이 비어있습니다.');
     }
 
-    // JSON 파싱 (마크다운 제거 및 유효성 검사)
+    console.log('[API] AI 응답 수신 성공');
+
+    // 6. 결과 파싱 및 반환
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const extractedData = JSON.parse(content);
-
-    // items 배열 처리
     const items = extractedData.items || (Array.isArray(extractedData) ? extractedData : []);
 
     return new Response(
@@ -167,9 +173,12 @@ export default async function handler(req: Request) {
     );
 
   } catch (error: any) {
-    console.error('Server Error:', error);
+    console.error('[API Critical Error]:', error);
     return new Response(
-      JSON.stringify({ error: error.message || '서버 처리 중 오류 발생' }),
+      JSON.stringify({ 
+        error: error.message || '서버 내부 오류가 발생했습니다.',
+        details: 'Vercel 로그를 확인하세요.' 
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
