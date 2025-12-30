@@ -66,9 +66,9 @@
                     </div>
                     <div class="ml-3">
                         <p class="text-sm text-yellow-700">
-                            <strong>[브라우저 자체 분석]</strong><br>
-                            서버 연결 없이 브라우저의 OCR(문자 인식) 기술로 이미지/파일을 분석했습니다.<br>
-                            * 실제 배포된 환경에서는 더 정밀한 AI 분석이 적용됩니다.
+                            <strong>[로컬/미리보기 모드 작동]</strong><br>
+                            서버(Vercel) 연결이 확인되지 않아 <strong>브라우저 자체 분석 엔진</strong>을 사용했습니다.<br>
+                            * 404 에러는 서버가 없어서 발생하는 정상적인 현상이며, 현재 모드에서는 무시됩니다.
                         </p>
                     </div>
                 </div>
@@ -108,6 +108,7 @@
         const ocrProgressContainer = document.getElementById('ocrProgressContainer');
         const ocrProgressBar = document.getElementById('ocrProgressBar');
 
+        // 환경 확인 플래그
         const isLocalOrPreview = window.location.protocol === 'file:' || window.location.protocol === 'blob:' || window.location.hostname.includes('lovable');
 
         // Paste Event
@@ -209,6 +210,7 @@
                 renderTable(result.data.items);
 
             } catch (error) {
+                // 404 또는 Fetch 에러 발생 시 시뮬레이션 모드로 전환하여 사용자에게 결과 표시
                 if (error.message === "API_NOT_FOUND" || error.message.includes('Failed to parse URL') || error.message.includes('fetch')) {
                     console.warn("서버 연결 실패 -> 시뮬레이션 모드 전환");
                     const simulatedItems = simulateAnalysis(textContentForSim, file.name);
@@ -247,7 +249,6 @@
             if (!content) return [];
 
             // 텍스트 전처리 (OCR 오류 보정)
-            // 숫자 O -> 0, I -> 1 등 간단한 보정
             const cleanContent = content.replace(/O/g, '0').replace(/l/g, '1');
             const rows = cleanContent.split('\n');
             
@@ -264,7 +265,9 @@
 
             rows.forEach((row, idx) => {
                 // 숫자 추출 (소수점 포함)
-                const nums = row.match(/\d+(\.\d+)?/g)?.map(Number) || [];
+                // 콤마 제거 후 공백 기준 분리 등 다양한 포맷 대응
+                const rawCols = row.replace(/,/g, ' ').split(/\s+/);
+                const nums = rawCols.map(c => parseFloat(c)).filter(n => !isNaN(n) && n > 0);
                 
                 // 유효 데이터 행 판단 (숫자가 3개 이상)
                 if (nums.length >= 3) {
@@ -322,7 +325,7 @@
                             weight: weight,
                             ingotType: ingotCode,
                             recoveryRate: yieldVal,
-                            note: `OCR/패턴 분석 결과 (${validNums.length}개 숫자 감지)`
+                            note: `패턴 분석 결과`
                         });
                     }
                 }
@@ -332,7 +335,7 @@
             if (items.length === 0 && cleanContent.trim().length > 0) {
                 items.push({
                     rowId: "RAW",
-                    productName: "TEXT_ONLY",
+                    productName: "TEXT_DETECTED",
                     material: "-",
                     inputSpec: {}, outputSpec: {},
                     weight: 0,
